@@ -1,0 +1,44 @@
+=== Secure Event Ticketing - functional workflow evidence === 
+Generated: pon 22.06.2026. 21:08:45,82 
+ 
+===== docker compose ps ===== 
+NAME                   IMAGE                  COMMAND                  SERVICE    CREATED         STATUS                   PORTS
+ticketing-api-1        ticketing-api          "docker-entrypoint.s…"   api        7 minutes ago   Up 7 minutes (healthy)   0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+ticketing-frontend-1   ticketing-frontend     "docker-entrypoint.s…"   frontend   7 minutes ago   Up 7 minutes (healthy)   0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp
+ticketing-postgres-1   postgres:16.4-alpine   "docker-entrypoint.s…"   postgres   7 minutes ago   Up 7 minutes (healthy)   5432/tcp
+ticketing-redis-1      redis:7.4-alpine       "docker-entrypoint.s…"   redis      7 minutes ago   Up 7 minutes (healthy)   6379/tcp
+ticketing-worker-1     ticketing-worker       "docker-entrypoint.s…"   worker     7 minutes ago   Up 7 minutes (healthy)   
+ 
+===== docker images (ticketing-*) ===== 
+IMAGE                       ID             DISK USAGE   CONTENT SIZE   EXTRA
+ticketing-api:latest        5dcb7629773f        236MB         56.3MB   U    
+ticketing-frontend:latest   2c7b0fa8355b        230MB           56MB   U    
+ticketing-worker:latest     77f0b9ed70e7        231MB         55.6MB   U    
+ 
+===== Non-root runtime user (expect uid=10001) ===== 
+-- api -- 
+uid=10001(app) gid=10001(app) groups=10001(app)
+-- frontend -- 
+uid=10001(app) gid=10001(app) groups=10001(app)
+-- worker -- 
+uid=10001(app) gid=10001(app) groups=10001(app)
+ 
+===== GET /healthz ===== 
+{"status":"ok","service":"api"} 
+===== GET /readyz ===== 
+{"status":"ready"} 
+===== GET /events ===== 
+[{"id":"evt-1001","name":"DevSecOps Bootcamp","location":"Zagreb","availableTickets":150},{"id":"evt-1002","name":"Cloud Native Day","location":"Split","availableTickets":200},{"id":"evt-1003","name":"Security Engineering Meetup","location":"Rijeka","availableTickets":90}] 
+===== POST /tickets/purchase ===== 
+{"message":"Order queued","orderId":"afc67b7f-db7e-4b02-b114-f51977fdb450"} 
+===== GET /tickets/orders (worker processed -> postgres) ===== 
+[{"order_id":"afc67b7f-db7e-4b02-b114-f51977fdb450","event_id":"evt-1001","customer_email":"student@example.com","quantity":2,"status":"processed","created_at":"2026-06-22T19:08:46.836Z"},{"order_id":"fc8967c1-d07b-44b3-b97e-c48ba42eaf94","event_id":"evt-1001","customer_email":"student@example.com","quantity":2,"status":"processed","created_at":"2026-06-22T19:01:44.234Z"}] 
+===== frontend / HTTP status ===== 
+frontend HTTP 200 
+ 
+===== worker logs (last 20) ===== 
+worker-1  | Worker started and waiting for jobs...
+worker-1  | Order processed
+worker-1  | Order processed
+ 
+DONE 

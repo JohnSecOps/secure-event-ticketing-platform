@@ -1,0 +1,14 @@
+Secure Event Ticketing Platform deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+1. Add the ingress host to /etc/hosts (point it at your ingress controller IP):
+   <INGRESS_IP>  {{ .Values.ingress.host }}
+
+2. Open the UI:        http://{{ .Values.ingress.host }}/
+   API health:         http://{{ .Values.ingress.host }}/api/healthz
+   API readiness:      http://{{ .Values.ingress.host }}/api/readyz
+
+3. Check rollout status:
+   kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "ticketing.fullname" . }}-api
+
+4. Roll back the last release if something is wrong:
+   helm rollback {{ .Release.Name }} 0 -n {{ .Release.Namespace }}

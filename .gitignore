@@ -1,0 +1,20 @@
+# Secrets / local env
+.env
+*.local
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Build / scan artifacts
+*.tar
+trivy-results.sarif
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Repo hygiene (scratch + large binaries not needed for CI)
+scripts/
+*.docx
+*.pdf

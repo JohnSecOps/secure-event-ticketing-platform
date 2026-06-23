@@ -1,0 +1,42 @@
+# Hot-reload development overlay.
+# Usage:
+#   docker compose -f compose.yaml -f compose.dev.yaml up --build
+#
+# Overrides the three Node services to run from bind-mounted source with nodemon,
+# so code changes on the host restart the service automatically. The base node
+# image is used (with dev dependencies installed at start) instead of the hardened
+# production image, because nodemon is a devDependency excluded from the runtime image.
+
+services:
+  api:
+    image: node:22.14-alpine
+    build: !reset null
+    working_dir: /app
+    command: ["sh", "-c", "npm install --no-audit --no-fund && npm run dev"]
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./app/api:/app
+      - /app/node_modules
+
+  worker:
+    image: node:22.14-alpine
+    build: !reset null
+    working_dir: /app
+    command: ["sh", "-c", "npm install --no-audit --no-fund && npm run dev"]
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./app/worker:/app
+      - /app/node_modules
+
+  frontend:
+    image: node:22.14-alpine
+    build: !reset null
+    working_dir: /app
+    command: ["sh", "-c", "npm install --no-audit --no-fund && npm run dev"]
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./app/frontend:/app
+      - /app/node_modules

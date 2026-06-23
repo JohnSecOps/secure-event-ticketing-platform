@@ -1,0 +1,714 @@
+---
+# Source: ticketing/templates/networkpolicy.yaml
+# Default-deny all ingress in the namespace; explicit policies below re-open only
+# the required paths (least-privilege network segmentation).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ticketing-default-deny-ingress
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+# Source: ticketing/templates/networkpolicy.yaml
+# Frontend: public entry point — reachable from the ingress controller / outside.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ticketing-allow-frontend
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+      app.kubernetes.io/instance: ticketing
+  policyTypes: ["Ingress"]
+  ingress:
+    - ports:
+        - port: 3000
+---
+# Source: ticketing/templates/networkpolicy.yaml
+# API: reachable from the frontend pods and from the ingress controller.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ticketing-allow-api
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api
+      app.kubernetes.io/instance: ticketing
+  policyTypes: ["Ingress"]
+  ingress:
+    - ports:
+        - port: 8080
+---
+# Source: ticketing/templates/networkpolicy.yaml
+# PostgreSQL: only the API and worker may connect.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ticketing-allow-postgres
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+      app.kubernetes.io/instance: ticketing
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api
+              app.kubernetes.io/instance: ticketing
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: worker
+              app.kubernetes.io/instance: ticketing
+      ports:
+        - port: 5432
+---
+# Source: ticketing/templates/networkpolicy.yaml
+# Redis: only the API and worker may connect.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ticketing-allow-redis
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/instance: ticketing
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api
+              app.kubernetes.io/instance: ticketing
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: worker
+              app.kubernetes.io/instance: ticketing
+      ports:
+        - port: 6379
+
+---
+# Source: ticketing/templates/rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ticketing
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+# Workloads do not call the Kubernetes API, so no token is mounted (least privilege).
+automountServiceAccountToken: false
+---
+# Source: ticketing/templates/config.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ticketing-secret
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "ReplaceMeInProduction"
+---
+# Source: ticketing/templates/config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ticketing-config
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+data:
+  API_PORT: "8080"
+  FRONTEND_PORT: "3000"
+  NODE_ENV: "production"
+  POSTGRES_DB: "ticketing"
+  POSTGRES_HOST: "ticketing-postgres"
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: "ticketing_user"
+  QUEUE_NAME: "ticket_orders"
+  REDIS_HOST: "ticketing-redis"
+  REDIS_PORT: "6379"
+---
+# Source: ticketing/templates/config.yaml
+# Postgres bootstrap schema, mounted into the init directory of the StatefulSet.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ticketing-postgres-init
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS ticket_orders (
+        id SERIAL PRIMARY KEY,
+        order_id TEXT UNIQUE NOT NULL,
+        event_id TEXT NOT NULL,
+        customer_email TEXT NOT NULL,
+        quantity INTEGER NOT NULL CHECK (quantity > 0),
+        status TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ticket_orders_created_at ON ticket_orders (created_at DESC);
+
+---
+# Source: ticketing/templates/rbac.yaml
+# Minimal Role: read-only access to its own ConfigMap/Secret for diagnostics.
+# No write verbs, no cluster-wide scope.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ticketing-read
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list"]
+---
+# Source: ticketing/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ticketing-read
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ticketing-read
+subjects:
+  - kind: ServiceAccount
+    name: ticketing
+    namespace: default
+
+---
+# Source: ticketing/templates/api.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ticketing-api
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+spec:
+  selector:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/instance: ticketing
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+
+---
+# Source: ticketing/templates/frontend.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ticketing-frontend
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+spec:
+  selector:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/instance: ticketing
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+
+---
+# Source: ticketing/templates/postgres.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ticketing-postgres
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: ticketing
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+
+---
+# Source: ticketing/templates/redis.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ticketing-redis
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+spec:
+  selector:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/instance: ticketing
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+
+---
+# Source: ticketing/templates/api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticketing-api
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+    app.kubernetes.io/name: api
+    app.kubernetes.io/instance: ticketing
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+      app.kubernetes.io/instance: ticketing
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: ticketing
+        app.kubernetes.io/managed-by: Helm
+        helm.sh/chart: ticketing-1.0.0
+        app.kubernetes.io/name: api
+        app.kubernetes.io/instance: ticketing
+    spec:
+      serviceAccountName: ticketing
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: "ghcr.io/matej-basic/devops-project-app/api:1.0.0"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: ticketing-config
+            - secretRef:
+                name: ticketing-secret
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+# Source: ticketing/templates/frontend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticketing-frontend
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/instance: ticketing
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+      app.kubernetes.io/instance: ticketing
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: ticketing
+        app.kubernetes.io/managed-by: Helm
+        helm.sh/chart: ticketing-1.0.0
+        app.kubernetes.io/name: frontend
+        app.kubernetes.io/instance: ticketing
+    spec:
+      serviceAccountName: ticketing
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: frontend
+          image: "ghcr.io/matej-basic/devops-project-app/frontend:1.0.0"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            # The browser reaches the API through the Ingress, not the cluster DNS name.
+            - name: API_BASE_URL
+              value: "http://ticketing.local/api"
+            - name: FRONTEND_PORT
+              value: "3000"
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            limits:
+              cpu: 250m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+---
+# Source: ticketing/templates/redis.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticketing-redis
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/instance: ticketing
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/instance: ticketing
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: ticketing
+        app.kubernetes.io/managed-by: Helm
+        helm.sh/chart: ticketing-1.0.0
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/instance: ticketing
+    spec:
+      serviceAccountName: ticketing
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: "redis:7.4-alpine"
+          imagePullPolicy: IfNotPresent
+          args: ["redis-server", "--save", "", "--appendonly", "no"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          ports:
+            - name: redis
+              containerPort: 6379
+          livenessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            limits:
+              cpu: 250m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+---
+# Source: ticketing/templates/worker.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticketing-worker
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/instance: ticketing
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+      app.kubernetes.io/instance: ticketing
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: ticketing
+        app.kubernetes.io/managed-by: Helm
+        helm.sh/chart: ticketing-1.0.0
+        app.kubernetes.io/name: worker
+        app.kubernetes.io/instance: ticketing
+    spec:
+      serviceAccountName: ticketing
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: "ghcr.io/matej-basic/devops-project-app/worker:1.0.0"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          envFrom:
+            - configMapRef:
+                name: ticketing-config
+            - secretRef:
+                name: ticketing-secret
+          # No HTTP port: liveness is process-based (the queue consumer must be running).
+          livenessProbe:
+            exec: { command: ["sh", "-c", "pgrep -f src/worker.js"] }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: 300m
+              memory: 192Mi
+            requests:
+              cpu: 50m
+              memory: 96Mi
+
+---
+# Source: ticketing/templates/postgres.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ticketing-postgres
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: ticketing
+spec:
+  serviceName: ticketing-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+      app.kubernetes.io/instance: ticketing
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: ticketing
+        app.kubernetes.io/managed-by: Helm
+        helm.sh/chart: ticketing-1.0.0
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/instance: ticketing
+    spec:
+      serviceAccountName: ticketing
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: "postgres:16.4-alpine"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            # Postgres needs to write its data dir; keep the rest hardened.
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              valueFrom: { configMapKeyRef: { name: ticketing-config, key: POSTGRES_DB } }
+            - name: POSTGRES_USER
+              valueFrom: { configMapKeyRef: { name: ticketing-config, key: POSTGRES_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: ticketing-secret, key: POSTGRES_PASSWORD } }
+            # Keep PGDATA in a subdir so the mounted volume root can stay clean.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          livenessProbe:
+            exec: { command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"] }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            exec: { command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"] }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init
+          configMap:
+            name: ticketing-postgres-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: "1Gi"
+---
+# Source: ticketing/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ticketing
+  labels:
+    app.kubernetes.io/part-of: ticketing
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: ticketing-1.0.0
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: "ticketing.local"
+      http:
+        paths:
+          # API first (more specific). The API itself strips the /api prefix.
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: ticketing-api
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ticketing-frontend
+                port:
+                  number: 3000

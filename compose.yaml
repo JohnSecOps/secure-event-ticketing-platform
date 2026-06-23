@@ -1,0 +1,106 @@
+# Secure Event Ticketing Platform — local developer environment
+# Bring up the whole stack with a single command:
+#   docker compose up --build
+# Hot-reload development mode (bind-mounted source + nodemon):
+#   docker compose -f compose.yaml -f compose.dev.yaml up --build
+#
+# Network segmentation (mirrors the production NetworkPolicy intent):
+#   edge    -> only frontend + api are reachable here
+#   backend -> api, worker, postgres, redis (data tier is NOT on the edge network)
+
+name: ticketing
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # Persistent data across restarts (requirement: data persistence for PostgreSQL).
+      - pgdata:/var/lib/postgresql/data
+      # Schema bootstrap runs only on first init of an empty data volume.
+      - ./app/infra/postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - backend
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # Lightweight queue/cache; AOF off keeps the dev container fast.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - backend
+
+  api:
+    build:
+      context: ./app/api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: development
+    ports:
+      - "${API_PORT}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - edge
+      - backend
+
+  worker:
+    build:
+      context: ./app/worker
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
+  frontend:
+    build:
+      context: ./app/frontend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # The browser (not the container) calls the API, so this is the host-published URL.
+      API_BASE_URL: "http://localhost:${API_PORT}"
+    ports:
+      - "${FRONTEND_PORT}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - edge
+
+volumes:
+  pgdata:
+
+networks:
+  edge:
+  backend:

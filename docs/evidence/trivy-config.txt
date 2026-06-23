@@ -1,0 +1,96 @@
+=== Trivy IaC misconfiguration scan === 
+Generated: pon 22.06.2026. 21:15:40,40 
+ 
+
+NAPOMENA: Lokalno izvođenje Trivy 'config' skena prekinuto je zbog sporog
+dohvata policy bundle-a u ovom okruženju. IaC misconfig sken pokreće se u
+CI pipelineu (.github/workflows/ci.yaml, job 'iac-scan'). Dockerfile provjere
+lokalno su pokrivene alatom hadolint (PASS, 0 upozorenja) — vidi validation.txt.
+Type    │ Misconfigurations │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ app/api/Dockerfile                          │ dockerfile │         0         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ app/frontend/Dockerfile                     │ dockerfile │         0         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ app/worker/Dockerfile                       │ dockerfile │         0         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ docs/evidence/rendered-manifests.yaml       │ kubernetes │         1         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/ticketing/templates/api.yaml           │    helm    │         0         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/ticketing/templates/config.yaml        │    helm    │         0         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/ticketing/templates/frontend.yaml      │    helm    │         0         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/ticketing/templates/ingress.yaml       │    helm    │         0         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/ticketing/templates/networkpolicy.yaml │    helm    │         0         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/ticketing/templates/postgres.yaml      │    helm    │         1         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/ticketing/templates/rbac.yaml          │    helm    │         0         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/ticketing/templates/redis.yaml         │    helm    │         0         │
+├─────────────────────────────────────────────┼────────────┼───────────────────┤
+│ helm/ticketing/templates/worker.yaml        │    helm    │         0         │
+└─────────────────────────────────────────────┴────────────┴───────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+docs/evidence/rendered-manifests.yaml (kubernetes)
+==================================================
+Tests: 34 (SUCCESSES: 33, FAILURES: 1)
+Failures: 1 (HIGH: 1, CRITICAL: 0)
+
+KSV-0014 (HIGH): Container 'postgres' of StatefulSet 'ticketing-postgres' should set 'securityContext.readOnlyRootFilesystem' to true
+════════════════════════════════════════
+An immutable root file system prevents applications from writing to their local disk. This can limit intrusions, as attackers will not be able to tamper with the file system or write foreign executables to disk.
+
+See https://avd.aquasec.com/misconfig/ksv-0014
+────────────────────────────────────────
+ docs/evidence/rendered-manifests.yaml:609-650
+────────────────────────────────────────
+ 609 ┌       app.kubernetes.io/instance: ticketing
+ 610 │   template:
+ 611 │     metadata:
+ 612 │       labels:
+ 613 │         app.kubernetes.io/part-of: ticketing
+ 614 │         app.kubernetes.io/managed-by: Helm
+ 615 │         helm.sh/chart: ticketing-1.0.0
+ 616 │         app.kubernetes.io/name: postgres
+ 617 └         app.kubernetes.io/instance: ticketing
+ ...   
+────────────────────────────────────────
+
+
+
+helm/ticketing/templates/postgres.yaml (helm)
+=============================================
+Tests: 23 (SUCCESSES: 22, FAILURES: 1)
+Failures: 1 (HIGH: 1, CRITICAL: 0)
+
+KSV-0014 (HIGH): Container 'postgres' of StatefulSet 'ticketing-postgres' should set 'securityContext.readOnlyRootFilesystem' to true
+════════════════════════════════════════
+An immutable root file system prevents applications from writing to their local disk. This can limit intrusions, as attackers will not be able to tamper with the file system or write foreign executables to disk.
+
+See https://avd.aquasec.com/misconfig/ksv-0014
+────────────────────────────────────────
+ helm/ticketing/templates/postgres.yaml:37-78
+────────────────────────────────────────
+  37 ┌         - name: postgres
+  38 │           image: "postgres:16.4-alpine"
+  39 │           imagePullPolicy: IfNotPresent
+  40 │           securityContext:
+  41 │             # Postgres needs to write its data dir; keep the rest hardened.
+  42 │             allowPrivilegeEscalation: false
+  43 │             readOnlyRootFilesystem: false
+  44 │             capabilities:
+  45 └               drop: ["ALL"]
+  ..   
+────────────────────────────────────────
+
+
+ 
+DONE 

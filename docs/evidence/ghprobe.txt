@@ -1,0 +1,22 @@
+=== GH PROBE === 
+[where git] 
+INFO: Could not find files for the given pattern(s).
+[git version] 
+'git' is not recognized as an internal or external command,
+operable program or batch file.
+[where gh] 
+INFO: Could not find files for the given pattern(s).
+[gh version] 
+'gh' is not recognized as an internal or external command,
+operable program or batch file.
+[gh auth] 
+'gh' is not recognized as an internal or external command,
+operable program or batch file.
+[github desktop] 
+no GitHubDesktop 
+[git config user] 
+'git' is not recognized as an internal or external command,
+operable program or batch file.
+'git' is not recognized as an internal or external command,
+operable program or batch file.
+DONE 
