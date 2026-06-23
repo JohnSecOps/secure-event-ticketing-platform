@@ -1,2 +1,72 @@
 === push log === 06/23/2026 18:53:14
 git: git version 2.54.0.windows.1
+[main (root-commit) 7895f6b] Secure Event Ticketing Platform - DevSecOps project
+ 62 files changed, 8960 insertions(+)
+ create mode 100644 .env.example
+ create mode 100644 .github/workflows/ci.yaml
+ create mode 100644 .gitignore
+ create mode 100644 README.md
+ create mode 100644 app/.env.example
+ create mode 100644 app/README-app-original.md
+ create mode 100644 app/api/.dockerignore
+ create mode 100644 app/api/Dockerfile
+ create mode 100644 app/api/package-lock.json
+ create mode 100644 app/api/package.json
+ create mode 100644 app/api/src/server.js
+ create mode 100644 app/frontend/.dockerignore
+ create mode 100644 app/frontend/Dockerfile
+ create mode 100644 app/frontend/package-lock.json
+ create mode 100644 app/frontend/package.json
+ create mode 100644 app/frontend/src/public/index.html
+ create mode 100644 app/frontend/src/server.js
+ create mode 100644 app/infra/postgres/init.sql
+ create mode 100644 app/worker/.dockerignore
+ create mode 100644 app/worker/Dockerfile
+ create mode 100644 app/worker/package-lock.json
+ create mode 100644 app/worker/package.json
+ create mode 100644 app/worker/src/worker.js
+ create mode 100644 compose.dev.yaml
+ create mode 100644 compose.yaml
+ create mode 100644 docs/architecture.png
+ create mode 100644 docs/deployment.md
+ create mode 100644 docs/evidence/README.md
+ create mode 100644 docs/evidence/environment.txt
+ create mode 100644 docs/evidence/ghprobe.txt
+ create mode 100644 docs/evidence/push-log.txt
+ create mode 100644 docs/evidence/rendered-manifests.yaml
+ create mode 100644 docs/evidence/shots/fin-01-compose.png
+ create mode 100644 docs/evidence/shots/fin-02-nonroot.png
+ create mode 100644 docs/evidence/shots/fin-03-workflow.png
+ create mode 100644 docs/evidence/shots/fin-04-trivy.png
+ create mode 100644 docs/evidence/shots/fin-05-desktop.png
+ create mode 100644 docs/evidence/shots/fin-06-webui.png
+ create mode 100644 docs/evidence/shots/k8s-01-pods.png
+ create mode 100644 docs/evidence/shots/k8s-02-ingress.png
+ create mode 100644 docs/evidence/shots/k8s-03-rolling.png
+ create mode 100644 docs/evidence/shots/k8s-04-rollback.png
+ create mode 100644 docs/evidence/trivy-config.txt
+ create mode 100644 docs/evidence/trivy-scan.txt
+ create mode 100644 docs/evidence/validation-summary.md
+ create mode 100644 docs/evidence/validation.txt
+ create mode 100644 docs/evidence/workflow.txt
+ create mode 100644 docs/runbook.md
+ create mode 100644 docs/security/image-scan-report.md
+ create mode 100644 helm/ticketing/Chart.yaml
+ create mode 100644 helm/ticketing/templates/NOTES.txt
+ create mode 100644 helm/ticketing/templates/_helpers.tpl
+ create mode 100644 helm/ticketing/templates/api.yaml
+ create mode 100644 helm/ticketing/templates/config.yaml
+ create mode 100644 helm/ticketing/templates/frontend.yaml
+ create mode 100644 helm/ticketing/templates/ingress.yaml
+ create mode 100644 helm/ticketing/templates/networkpolicy.yaml
+ create mode 100644 helm/ticketing/templates/postgres.yaml
+ create mode 100644 helm/ticketing/templates/rbac.yaml
+ create mode 100644 helm/ticketing/templates/redis.yaml
+ create mode 100644 helm/ticketing/templates/worker.yaml
+ create mode 100644 helm/ticketing/values.yaml
+Pushing (a browser authorization window may open - approve it)...
+To https://github.com/JohnSecOps/secure-event-ticketing-platform.git
+ * [new branch]      main -> main
+branch 'main' set up to track 'origin/main'.
+push exit code: 0
+DONE
