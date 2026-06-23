@@ -17,7 +17,7 @@ WORKDIR /app
 
 # Drop privileges: create an unprivileged user/group with a fixed UID/GID so the
 # Kubernetes securityContext (runAsUser: 10001) maps to the same identity.
-RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app -H -s /sbin/nologin app
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx && addgroup -S -g 10001 app && adduser -S -u 10001 -G app -H -s /sbin/nologin app
 
 # Copy only what the service needs to run.
 COPY --from=build --chown=app:app /app/node_modules ./node_modules

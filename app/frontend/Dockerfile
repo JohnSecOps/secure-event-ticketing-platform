@@ -11,7 +11,7 @@ ENV NODE_ENV=production \
     FRONTEND_PORT=3000
 WORKDIR /app
 
-RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app -H -s /sbin/nologin app
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx && addgroup -S -g 10001 app && adduser -S -u 10001 -G app -H -s /sbin/nologin app
 
 COPY --from=build --chown=app:app /app/node_modules ./node_modules
 COPY --chown=app:app package.json ./

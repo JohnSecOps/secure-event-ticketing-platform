@@ -1,1 +1,4 @@
 === repush === 06/23/2026 19:01:52
+[main 17204da] ci: fix trivy-action version, scan tag, lowercase GHCR image
+ 3 files changed, 91 insertions(+), 44 deletions(-)
+ create mode 100644 docs/evidence/repush-log.txt
